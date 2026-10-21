@@ -9,26 +9,42 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
-  refreshToken        String?
+  id                  String    @id @db.VarChar(191)
+  shop                String    @db.VarChar(191)
+  state               String    @db.VarChar(191)
+  isOnline            Boolean   @default(false)
+  scope               String?   @db.Text
+  expires             DateTime?
+  accessToken         String    @db.Text
+  userId              BigInt?
+  firstName           String?   @db.VarChar(191)
+  lastName            String?   @db.VarChar(191)
+  email               String?   @db.VarChar(191)
+  accountOwner        Boolean   @default(false)
+  locale              String?   @db.VarChar(191)
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?   @db.Text
   refreshTokenExpires DateTime?
+}
+
+model CampaignSettings {
+  id                     String    @id @default(cuid()) @db.VarChar(191)
+  shop                   String    @unique @db.VarChar(191)
+  campaignName           String    @db.VarChar(255)
+  startDate              DateTime?
+  endDate                DateTime?
+  timezone               String    @db.VarChar(191)
+  enabled                Boolean   @default(false)
+  englishMessage         String    @db.Text
+  frenchMessage          String    @db.Text
+  englishThankYouMessage String    @db.Text
+  frenchThankYouMessage  String    @db.Text
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 }
