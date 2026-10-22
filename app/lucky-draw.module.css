@@ -1,0 +1,226 @@
+.pageIntro {
+  margin: 0;
+  color: #616161;
+  font-size: 14px;
+}
+
+.statCard {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid #e1e3e5;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.statTickets {
+  border-color: #c4a7f2;
+  background: #f2eaff;
+}
+
+.statCustomers {
+  border-color: #91bfff;
+  background: #e7f1ff;
+}
+
+.statWinners {
+  border-color: #8fd3a7;
+  background: #e3f5e9;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.wheelCard {
+  position: relative;
+  min-height: 590px;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid #e1e3e5;
+  border-radius: 16px;
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(112, 66, 193, 0.09),
+      transparent 48%
+    ),
+    #fff;
+  text-align: center;
+}
+
+.wheelStage {
+  position: relative;
+  width: min(100%, 440px);
+  margin: 14px auto 20px;
+  aspect-ratio: 1;
+}
+
+.pointer {
+  position: absolute;
+  z-index: 4;
+  top: -3px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-right: 18px solid transparent;
+  border-left: 18px solid transparent;
+  border-top: 42px solid #202223;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.24));
+  transform: translateX(-50%);
+}
+
+.wheel {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 18px 22px rgba(45, 23, 76, 0.22));
+  transition: transform 6s cubic-bezier(0.12, 0.68, 0.08, 1);
+  will-change: transform;
+}
+
+.wheelRim {
+  fill: #fff;
+  stroke: #202223;
+  stroke-width: 7;
+}
+
+.segment {
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 2;
+}
+
+.segmentLabel {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.25);
+  stroke-width: 2px;
+}
+
+.spinHubButton {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: 102px;
+  height: 102px;
+  padding: 0;
+  border: 7px solid #fff;
+  border-radius: 50%;
+  outline: 5px solid #202223;
+  background: #202223;
+  color: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.spinHubButton:hover:not(:disabled) {
+  background: #303234;
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.spinHubButton:focus-visible {
+  outline: 5px solid #005bd3;
+  box-shadow: 0 0 0 8px rgba(0, 91, 211, 0.22);
+}
+
+.spinHubButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.winnerCard {
+  overflow: hidden;
+  border: 1px solid #e1e3e5;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.winnerHighlight {
+  padding: 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f4ecff, #eef5ff);
+  text-align: center;
+}
+
+.ticketNumber {
+  margin: 8px 0 4px;
+  color: #5c2d91;
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.detailItem {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f6f6f7;
+}
+
+.confetti {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confettiPiece {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  animation: fall 2.2s ease-in forwards;
+}
+
+@keyframes fall {
+  0% {
+    transform: translateY(-10px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(650px) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 800px) {
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+  .wheelCard {
+    min-height: auto;
+    padding: 16px;
+  }
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel {
+    transition-duration: 0.01ms;
+  }
+  .confettiPiece {
+    animation: none;
+    display: none;
+  }
+}

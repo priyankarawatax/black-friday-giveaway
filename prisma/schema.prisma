@@ -34,17 +34,92 @@ model Session {
 }
 
 model CampaignSettings {
-  id                     String    @id @default(cuid()) @db.VarChar(191)
-  shop                   String    @unique @db.VarChar(191)
-  campaignName           String    @db.VarChar(255)
-  startDate              DateTime?
-  endDate                DateTime?
-  timezone               String    @db.VarChar(191)
-  enabled                Boolean   @default(false)
-  englishMessage         String    @db.Text
-  frenchMessage          String    @db.Text
-  englishThankYouMessage String    @db.Text
-  frenchThankYouMessage  String    @db.Text
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                       BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shop                     String           @unique @db.VarChar(191)
+  campaignName             String           @db.VarChar(255)
+  startDate                DateTime?
+  endDate                  DateTime?
+  timezone                 String           @db.VarChar(191)
+  enabled                  Boolean          @default(false)
+  englishMessage           String           @db.Text
+  frenchMessage            String           @db.Text
+  englishTicketMessage     String           @db.Text
+  frenchTicketMessage      String           @db.Text
+  englishMotivationMessage String           @db.Text
+  frenchMotivationMessage  String           @db.Text
+  englishThankYouMessage   String           @db.Text
+  frenchThankYouMessage    String           @db.Text
+  maxWinners               Int              @default(1) @db.UnsignedInt
+  preventRepeatWinner      Boolean          @default(false)
+  showWinnerRemoveAction   Boolean          @default(true)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  entries                  GiveawayEntry[]
+  tickets                  GiveawayTicket[]
+  winners                  GiveawayWinner[]
+}
+
+model GiveawayEntry {
+  id                BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shop              String           @db.VarChar(191)
+  campaignId        BigInt           @db.UnsignedBigInt
+  shopifyCustomerId String           @db.VarChar(191)
+  customerName      String           @db.VarChar(255)
+  customerEmail     String           @db.VarChar(320)
+  shopifyOrderId    String           @db.VarChar(191)
+  orderNumber       String           @db.VarChar(191)
+  orderDate         DateTime
+  eligibleAmount    Decimal          @db.Decimal(18, 2)
+  currencyCode      String           @db.VarChar(3)
+  source            String           @default("SHOPIFY_ORDER") @db.VarChar(64)
+  status            String           @default("ELIGIBLE") @db.VarChar(32)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  campaign          CampaignSettings @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tickets           GiveawayTicket[]
+  winners           GiveawayWinner[]
+
+  @@unique([shop, shopifyOrderId])
+  @@index([shop, campaignId, status, orderDate])
+  @@index([shop, shopifyCustomerId])
+  @@index([shop, customerEmail])
+}
+
+model GiveawayTicket {
+  id           BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shop         String           @db.VarChar(191)
+  campaignId   BigInt           @db.UnsignedBigInt
+  entryId      BigInt           @db.UnsignedBigInt
+  ticketNumber String           @db.VarChar(191)
+  status       String           @default("VALID") @db.VarChar(32)
+  createdAt    DateTime         @default(now())
+  campaign     CampaignSettings @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  entry        GiveawayEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  winners      GiveawayWinner[]
+
+  @@unique([campaignId, ticketNumber])
+  @@index([shop, campaignId, status])
+  @@index([shop, ticketNumber])
+  @@index([entryId, status])
+}
+
+model GiveawayWinner {
+  id             BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shop           String           @db.VarChar(191)
+  campaignId     BigInt           @db.UnsignedBigInt
+  ticketId       BigInt           @unique @db.UnsignedBigInt
+  entryId        BigInt           @db.UnsignedBigInt
+  customerId     String           @db.VarChar(191)
+  shopifyOrderId String           @db.VarChar(191)
+  drawId         String           @db.VarChar(191)
+  status         String           @default("CONFIRMED") @db.VarChar(32)
+  drawnAt        DateTime         @default(now())
+  campaign       CampaignSettings @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ticket         GiveawayTicket   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  entry          GiveawayEntry    @relation(fields: [entryId], references: [id], onDelete: Restrict)
+
+  @@unique([shop, drawId])
+  @@index([shop, campaignId, drawnAt])
+  @@index([shop, customerId])
+  @@index([entryId])
 }

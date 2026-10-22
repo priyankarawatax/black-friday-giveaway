@@ -1,0 +1,27 @@
+.summaryCard {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+}
+
+.summaryGreen {
+  background: linear-gradient(135deg, #e8f8ee 0%, #d5f2df 100%);
+  border-color: #9bd5af;
+}
+
+.summaryPurple {
+  background: linear-gradient(135deg, #f2eafe 0%, #e7d8fb 100%);
+  border-color: #c7a6ee;
+}
+
+.summaryBlue {
+  background: linear-gradient(135deg, #e8f3ff 0%, #d8eaff 100%);
+  border-color: #9fc7f4;
+}
+
+.summaryAmber {
+  background: linear-gradient(135deg, #fff7df 0%, #ffedbd 100%);
+  border-color: #e7c875;
+}

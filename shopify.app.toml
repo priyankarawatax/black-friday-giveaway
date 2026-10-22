@@ -1,13 +1,35 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "e410089d3d85248f39089fc6dac682c9"
+name = "Black Friday giveaway"
 application_url = "https://example.com"
 embedded = true
-name = "Black Friday giveaway"
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/process"
+  topics = [ "orders/paid", "orders/fulfilled" ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions"
+scopes = "read_customers,read_orders,write_products,write_metaobjects,write_metaobject_definitions"
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
@@ -15,6 +37,14 @@ name = "Demo Source Info"
 description = "Tracks products created by the Shopify app template for development"
 
   [product.metafields.app.demo_info.access]
+  admin = "merchant_read_write"
+
+[shop.metafields.app.black_friday_checkout_config]
+type = "json"
+name = "Black Friday checkout configuration"
+description = "Publishes the active giveaway schedule and localized checkout messages to the checkout extension"
+
+  [shop.metafields.app.black_friday_checkout_config.access]
   admin = "merchant_read_write"
 
 [metaobjects.app.example]
@@ -32,21 +62,3 @@ required = true
 [metaobjects.app.example.fields.description]
 name = "Description"
 type = "multi_line_text_field"
-
-[webhooks]
-api_version = "2027-01"
-
-  [[webhooks.subscriptions]]
-  uri = "/webhooks/app/uninstalled"
-  topics = [ "app/uninstalled" ]
-
-  [[webhooks.subscriptions]]
-  uri = "/webhooks/app/scopes_update"
-  topics = [ "app/scopes_update" ]
-
-[auth]
-redirect_urls = [ "https://example.com/api/auth" ]
-
-[build]
-include_config_on_deploy = true
-automatically_update_urls_on_dev = true

@@ -1,0 +1,21 @@
+{
+  "entryConfirmation": "Votre participation à notre concours du Vendredi fou est enregistrée !",
+  "ticketSummary": "Cette commande vous rapporte {{orderTickets}} billets. Votre total sera de {{totalTickets}} billets.",
+  "motivationalMessage": "Plus vous avez de billets, plus vous avez de chances de gagner un voyage en Asie.",
+  "thankYou": {
+    "heading": "🎁 You're In! Black Friday Giveaway",
+    "purchaseThanks": "Thank you for your order!",
+    "ticketSummary": "🎟️ Your Tickets: {{range}} ({{count}} Tickets)",
+    "ticketsUpdating": "🎟️ Your Tickets: Updating shortly",
+    "motivationPrefix": "More tickets, more chances to win a",
+    "dreamTrip": "dream trip to Asia!"
+  },
+  "thankYouFr": {
+    "heading": "🎁 Vous participez ! Concours du Vendredi fou",
+    "purchaseThanks": "Merci pour votre commande !",
+    "ticketSummary": "🎟️ Vos billets : {{range}} ({{count}} billets)",
+    "ticketsUpdating": "🎟️ Vos billets : mise à jour prochaine",
+    "motivationPrefix": "Plus de billets, plus de chances de gagner un",
+    "dreamTrip": "voyage de rêve en Asie !"
+  }
+}

@@ -1,0 +1,21 @@
+CREATE TABLE `GiveawayWinner` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `shop` VARCHAR(191) NOT NULL,
+  `campaignId` BIGINT UNSIGNED NOT NULL,
+  `ticketId` BIGINT UNSIGNED NOT NULL,
+  `entryId` BIGINT UNSIGNED NOT NULL,
+  `customerId` VARCHAR(191) NOT NULL,
+  `shopifyOrderId` VARCHAR(191) NOT NULL,
+  `drawId` VARCHAR(191) NOT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'CONFIRMED',
+  `drawnAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE INDEX `GiveawayWinner_ticketId_key` (`ticketId`),
+  UNIQUE INDEX `GiveawayWinner_shop_drawId_key` (`shop`, `drawId`),
+  INDEX `GiveawayWinner_shop_campaignId_drawnAt_idx` (`shop`, `campaignId`, `drawnAt`),
+  INDEX `GiveawayWinner_shop_customerId_idx` (`shop`, `customerId`),
+  INDEX `GiveawayWinner_entryId_idx` (`entryId`),
+  PRIMARY KEY (`id`),
+  CONSTRAINT `GiveawayWinner_campaignId_fkey` FOREIGN KEY (`campaignId`) REFERENCES `CampaignSettings` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `GiveawayWinner_ticketId_fkey` FOREIGN KEY (`ticketId`) REFERENCES `GiveawayTicket` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `GiveawayWinner_entryId_fkey` FOREIGN KEY (`entryId`) REFERENCES `GiveawayEntry` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

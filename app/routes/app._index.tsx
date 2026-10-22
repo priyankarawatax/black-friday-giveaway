@@ -17,8 +17,12 @@ type FormValues = {
   startDate: string;
   endDate: string;
   enabled: boolean;
-  checkoutMessageEn: string;
-  checkoutMessageFr: string;
+  checkoutEntryMessageEn: string;
+  checkoutTicketMessageEn: string;
+  checkoutMotivationMessageEn: string;
+  checkoutEntryMessageFr: string;
+  checkoutTicketMessageFr: string;
+  checkoutMotivationMessageFr: string;
   thankYouMessageEn: string;
   thankYouMessageFr: string;
 };
@@ -31,15 +35,22 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const CAMPAIGN_NAME = "Black Friday Giveaway";
 const MAX_MESSAGE_LENGTH = 500;
+const CHECKOUT_METAFIELD_KEY = "black_friday_checkout_config";
 const DEFAULTS = {
-  checkoutMessageEn:
-    "You're entering our Black Friday Giveaway. Complete your checkout to confirm your entry. Terms and conditions apply.",
-  checkoutMessageFr:
-    "Vous participez à notre concours du Vendredi fou. Finalisez votre paiement pour confirmer votre participation. Des conditions s'appliquent.",
+  checkoutEntryMessageEn: "You're entered in our Black Friday Giveaway!",
+  checkoutTicketMessageEn:
+    "This order earns you {tickets} tickets. Your total will be {total-tickets} tickets.",
+  checkoutMotivationMessageEn:
+    "The more tickets you have, the higher your chances to win a trip to Asia.",
+  checkoutEntryMessageFr: "Vous participez à notre concours du Vendredi fou !",
+  checkoutTicketMessageFr:
+    "Cette commande vous rapporte {tickets} billets. Votre total sera de {total-tickets} billets.",
+  checkoutMotivationMessageFr:
+    "Plus vous avez de billets, plus vous avez de chances de gagner un voyage en Asie.",
   thankYouMessageEn:
-    "Thank you for your order! Your entry into our Black Friday Giveaway has been confirmed. Good luck!",
+    "You're In! Black Friday Giveaway\n\nThank you for your order!\nYou earn total {tickets-num} tickets.\nMore tickets, more chances to win a dream trip to Asia!",
   thankYouMessageFr:
-    "Merci pour votre commande ! Votre participation à notre concours du Vendredi fou est confirmée. Bonne chance !",
+    "Vous participez au concours du Vendredi fou !\n\nMerci pour votre commande !\nVous gagnez un total de {tickets-num} billets.\nPlus de billets, plus de chances de gagner un voyage de rêve en Asie !",
 };
 
 function formatInTimezone(date: Date, timezone: string) {
@@ -140,6 +151,10 @@ function toFormValues(
     endDate: Date | null;
     englishMessage: string;
     frenchMessage: string;
+    englishTicketMessage: string;
+    frenchTicketMessage: string;
+    englishMotivationMessage: string;
+    frenchMotivationMessage: string;
     englishThankYouMessage: string;
     frenchThankYouMessage: string;
   } | null,
@@ -153,8 +168,19 @@ function toFormValues(
       ? formatInTimezone(settings.endDate, timezone).date
       : "",
     enabled: settings?.enabled ?? false,
-    checkoutMessageEn: settings?.englishMessage ?? DEFAULTS.checkoutMessageEn,
-    checkoutMessageFr: settings?.frenchMessage ?? DEFAULTS.checkoutMessageFr,
+    checkoutEntryMessageEn:
+      settings?.englishMessage ?? DEFAULTS.checkoutEntryMessageEn,
+    checkoutTicketMessageEn:
+      settings?.englishTicketMessage ?? DEFAULTS.checkoutTicketMessageEn,
+    checkoutMotivationMessageEn:
+      settings?.englishMotivationMessage ??
+      DEFAULTS.checkoutMotivationMessageEn,
+    checkoutEntryMessageFr:
+      settings?.frenchMessage ?? DEFAULTS.checkoutEntryMessageFr,
+    checkoutTicketMessageFr:
+      settings?.frenchTicketMessage ?? DEFAULTS.checkoutTicketMessageFr,
+    checkoutMotivationMessageFr:
+      settings?.frenchMotivationMessage ?? DEFAULTS.checkoutMotivationMessageFr,
     thankYouMessageEn:
       settings?.englishThankYouMessage ?? DEFAULTS.thankYouMessageEn,
     thankYouMessageFr:
@@ -173,6 +199,7 @@ async function getShopContext(
     `#graphql
       query CampaignShopContext {
         shop {
+          id
           name
           ianaTimezone
         }
@@ -180,6 +207,88 @@ async function getShopContext(
   );
   const json = await response.json();
   return json.data!.shop;
+}
+
+async function syncCheckoutCampaignConfig(
+  admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"],
+  ownerId: string,
+  settings: {
+    enabled: boolean;
+    startDate: Date | null;
+    endDate: Date | null;
+    timezone: string;
+    englishMessage: string;
+    frenchMessage: string;
+    englishTicketMessage: string;
+    frenchTicketMessage: string;
+    englishMotivationMessage: string;
+    frenchMotivationMessage: string;
+    englishThankYouMessage: string;
+    frenchThankYouMessage: string;
+  },
+) {
+  const response = await admin.graphql(
+    `#graphql
+      mutation SyncBlackFridayCheckoutConfig($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }`,
+    {
+      variables: {
+        metafields: [
+          {
+            ownerId,
+            namespace: "$app",
+            key: CHECKOUT_METAFIELD_KEY,
+            type: "json",
+            value: JSON.stringify({
+              version: 1,
+              enabled: settings.enabled,
+              startAt: settings.startDate?.toISOString() ?? null,
+              endAt: settings.endDate?.toISOString() ?? null,
+              timezone: settings.timezone,
+              ticketTotalUrl: process.env.SHOPIFY_APP_URL
+                ? `${process.env.SHOPIFY_APP_URL.replace(/\/$/, "")}/api/checkout-ticket-total`
+                : null,
+              thankYouUrl: process.env.SHOPIFY_APP_URL
+                ? `${process.env.SHOPIFY_APP_URL.replace(/\/$/, "")}/api/thank-you-giveaway`
+                : null,
+              messages: {
+                en: {
+                  entry: settings.englishMessage,
+                  tickets: settings.englishTicketMessage,
+                  motivation: settings.englishMotivationMessage,
+                },
+                fr: {
+                  entry: settings.frenchMessage,
+                  tickets: settings.frenchTicketMessage,
+                  motivation: settings.frenchMotivationMessage,
+                },
+              },
+              thankYouMessages: {
+                en: settings.englishThankYouMessage,
+                fr: settings.frenchThankYouMessage,
+              },
+            }),
+          },
+        ],
+      },
+    },
+  );
+  const json = await response.json();
+  const userErrors = json.data?.metafieldsSet?.userErrors ?? [];
+  if (userErrors.length) {
+    throw new Error(
+      userErrors.map((error: { message: string }) => error.message).join(" "),
+    );
+  }
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -206,8 +315,18 @@ export const action = async ({
     startDate: formString(formData, "startDate").trim(),
     endDate: formString(formData, "endDate").trim(),
     enabled: formData.get("enabled") === "true",
-    checkoutMessageEn: formString(formData, "checkoutMessageEn"),
-    checkoutMessageFr: formString(formData, "checkoutMessageFr"),
+    checkoutEntryMessageEn: formString(formData, "checkoutEntryMessageEn"),
+    checkoutTicketMessageEn: formString(formData, "checkoutTicketMessageEn"),
+    checkoutMotivationMessageEn: formString(
+      formData,
+      "checkoutMotivationMessageEn",
+    ),
+    checkoutEntryMessageFr: formString(formData, "checkoutEntryMessageFr"),
+    checkoutTicketMessageFr: formString(formData, "checkoutTicketMessageFr"),
+    checkoutMotivationMessageFr: formString(
+      formData,
+      "checkoutMotivationMessageFr",
+    ),
     thankYouMessageEn: formString(formData, "thankYouMessageEn"),
     thankYouMessageFr: formString(formData, "thankYouMessageFr"),
   };
@@ -219,14 +338,34 @@ export const action = async ({
   if (needsSchedule && !DATE_PATTERN.test(values.endDate))
     fieldErrors.endDate = "Select an end date.";
   for (const key of [
-    "checkoutMessageEn",
-    "checkoutMessageFr",
+    "checkoutEntryMessageEn",
+    "checkoutTicketMessageEn",
+    "checkoutMotivationMessageEn",
+    "checkoutEntryMessageFr",
+    "checkoutTicketMessageFr",
+    "checkoutMotivationMessageFr",
     "thankYouMessageEn",
     "thankYouMessageFr",
   ] as const) {
     if (values[key].length > MAX_MESSAGE_LENGTH)
       fieldErrors[key] =
         `Keep this message under ${MAX_MESSAGE_LENGTH} characters.`;
+  }
+  for (const key of [
+    "checkoutTicketMessageEn",
+    "checkoutTicketMessageFr",
+  ] as const) {
+    if (
+      !values[key].includes("{tickets}") ||
+      !values[key].includes("{total-tickets}")
+    )
+      fieldErrors[key] =
+        "Include {tickets} and {total-tickets} so the app can insert both counts.";
+  }
+  for (const key of ["thankYouMessageEn", "thankYouMessageFr"] as const) {
+    if (!values[key].includes("{tickets-num}"))
+      fieldErrors[key] =
+        "Include {tickets-num} so the app can insert the Shopify cart total as the ticket count.";
   }
 
   let startDate: Date | null = null;
@@ -270,8 +409,12 @@ export const action = async ({
       enabled: values.enabled,
       startDate,
       endDate,
-      englishMessage: values.checkoutMessageEn,
-      frenchMessage: values.checkoutMessageFr,
+      englishMessage: values.checkoutEntryMessageEn,
+      frenchMessage: values.checkoutEntryMessageFr,
+      englishTicketMessage: values.checkoutTicketMessageEn,
+      frenchTicketMessage: values.checkoutTicketMessageFr,
+      englishMotivationMessage: values.checkoutMotivationMessageEn,
+      frenchMotivationMessage: values.checkoutMotivationMessageFr,
       englishThankYouMessage: values.thankYouMessageEn,
       frenchThankYouMessage: values.thankYouMessageFr,
     },
@@ -280,12 +423,27 @@ export const action = async ({
       enabled: values.enabled,
       startDate,
       endDate,
-      englishMessage: values.checkoutMessageEn,
-      frenchMessage: values.checkoutMessageFr,
+      englishMessage: values.checkoutEntryMessageEn,
+      frenchMessage: values.checkoutEntryMessageFr,
+      englishTicketMessage: values.checkoutTicketMessageEn,
+      frenchTicketMessage: values.checkoutTicketMessageFr,
+      englishMotivationMessage: values.checkoutMotivationMessageEn,
+      frenchMotivationMessage: values.checkoutMotivationMessageFr,
       englishThankYouMessage: values.thankYouMessageEn,
       frenchThankYouMessage: values.thankYouMessageFr,
     },
   });
+  try {
+    await syncCheckoutCampaignConfig(admin, shop.id, saved);
+  } catch (error) {
+    console.error("Checkout campaign metafield sync failed", error);
+    return {
+      ok: false,
+      error:
+        "Settings were saved, but checkout could not be updated. Save again to retry.",
+      fieldErrors: {},
+    };
+  }
   return {
     ok: true,
     status: deriveStatus(saved),
@@ -304,14 +462,32 @@ function SummaryCard({
   color: "green" | "purple" | "blue";
   children: React.ReactNode;
 }) {
-  const colorClass = {
-    green: styles.summaryGreen,
-    purple: styles.summaryPurple,
-    blue: styles.summaryBlue,
+  const colorStyle = {
+    green: {
+      background: "linear-gradient(135deg, #e8f8ee 0%, #d5f2df 100%)",
+      borderColor: "#9bd5af",
+    },
+    purple: {
+      background: "linear-gradient(135deg, #f2eafe 0%, #e7d8fb 100%)",
+      borderColor: "#c7a6ee",
+    },
+    blue: {
+      background: "linear-gradient(135deg, #e8f3ff 0%, #d8eaff 100%)",
+      borderColor: "#9fc7f4",
+    },
   }[color];
 
   return (
-    <div className={`${styles.summaryCard} ${colorClass}`}>
+    <div
+      style={{
+        height: "100%",
+        boxSizing: "border-box",
+        padding: 18,
+        border: "1px solid",
+        borderRadius: 14,
+        ...colorStyle,
+      }}
+    >
       <s-stack direction="block" gap="small">
         <s-stack direction="inline" gap="small" alignItems="center">
           <s-icon type={icon} tone="neutral"></s-icon>
@@ -332,9 +508,6 @@ export default function CampaignSettingsPage() {
   const [formVersion, setFormVersion] = useState(0);
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
   const [language, setLanguage] = useState<"en" | "fr">("en");
-  const [previewMode, setPreviewMode] = useState<"checkout" | "thankYou">(
-    "checkout",
-  );
   const actionData = fetcher.data;
   const saving = fetcher.state === "submitting";
   const dirty = useMemo(
@@ -369,14 +542,34 @@ export default function CampaignSettingsPage() {
     if (form.startDate && form.endDate && form.endDate < form.startDate)
       nextErrors.endDate = "End date cannot be before the start date.";
     for (const key of [
-      "checkoutMessageEn",
-      "checkoutMessageFr",
+      "checkoutEntryMessageEn",
+      "checkoutTicketMessageEn",
+      "checkoutMotivationMessageEn",
+      "checkoutEntryMessageFr",
+      "checkoutTicketMessageFr",
+      "checkoutMotivationMessageFr",
       "thankYouMessageEn",
       "thankYouMessageFr",
     ] as const) {
       if (form[key].length > MAX_MESSAGE_LENGTH)
         nextErrors[key] =
           `Keep this message under ${MAX_MESSAGE_LENGTH} characters.`;
+    }
+    for (const key of [
+      "checkoutTicketMessageEn",
+      "checkoutTicketMessageFr",
+    ] as const) {
+      if (
+        !form[key].includes("{tickets}") ||
+        !form[key].includes("{total-tickets}")
+      )
+        nextErrors[key] =
+          "Include {tickets} and {total-tickets} so the app can insert both counts.";
+    }
+    for (const key of ["thankYouMessageEn", "thankYouMessageFr"] as const) {
+      if (!form[key].includes("{tickets-num}"))
+        nextErrors[key] =
+          "Include {tickets-num} so the app can insert the Shopify cart total as the ticket count.";
     }
     setClientErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
@@ -398,14 +591,29 @@ export default function CampaignSettingsPage() {
       ? formatDateRange(baseline.startDate, baseline.endDate)
       : "Not scheduled";
   const checkoutVisible = baseline.enabled && status === "Active";
-  const previewMessage =
-    previewMode === "checkout"
-      ? language === "en"
-        ? form.checkoutMessageEn
-        : form.checkoutMessageFr
-      : language === "en"
-        ? form.thankYouMessageEn
-        : form.thankYouMessageFr;
+  const checkoutPreview =
+    language === "en"
+      ? {
+          confirmation: form.checkoutEntryMessageEn,
+          tickets: form.checkoutTicketMessageEn
+            .replaceAll("{tickets}", "47")
+            .replaceAll("{total-tickets}", "47"),
+          motivation: form.checkoutMotivationMessageEn,
+        }
+      : {
+          confirmation: form.checkoutEntryMessageFr,
+          tickets: form.checkoutTicketMessageFr
+            .replaceAll("{tickets}", "47")
+            .replaceAll("{total-tickets}", "47"),
+          motivation: form.checkoutMotivationMessageFr,
+        };
+  const thankYouPreviewLines = (
+    language === "en" ? form.thankYouMessageEn : form.thankYouMessageFr
+  )
+    .replaceAll("{tickets-num}", "47")
+    .replaceAll("{tickets}", "47")
+    .split(/\n+/)
+    .filter(Boolean);
 
   return (
     <s-page heading="Campaign Settings" inlineSize="large">
@@ -419,17 +627,61 @@ export default function CampaignSettingsPage() {
       </SaveBar>
 
       <s-stack direction="block" gap="base">
-        <div className={styles.hero}>
-          <div className={styles.heroContent}>
+        <div
+          style={{
+            position: "relative",
+            height: 132,
+            overflow: "hidden",
+            borderRadius: 18,
+            background:
+              "radial-gradient(circle at 78% 30%, rgba(147, 51, 234, 0.38), transparent 34%), linear-gradient(120deg, #09070d 0%, #171020 52%, #30104d 100%)",
+            color: "#ffffff",
+            boxShadow: "0 12px 36px rgba(34, 12, 52, 0.18)",
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              zIndex: 2,
+              maxWidth: 520,
+              padding: "16px 24px",
+            }}
+          >
             <s-badge tone={badgeTone(status)}>{status}</s-badge>
-            <h1 className={styles.heroTitle}>Black Friday Giveaway</h1>
-            <p className={styles.heroDescription}>
+            <h1
+              style={{
+                margin: "7px 0 5px",
+                color: "#ffffff",
+                fontSize: "clamp(22px, 2.8vw, 30px)",
+                lineHeight: 1.05,
+                letterSpacing: "-0.035em",
+              }}
+            >
+              Black Friday Giveaway
+            </h1>
+            <p
+              style={{
+                maxWidth: 480,
+                margin: 0,
+                color: "rgba(255, 255, 255, 0.78)",
+                fontSize: 13,
+                lineHeight: 1.35,
+              }}
+            >
               Set up your campaign dates and customer messages to create an
               exciting Black Friday shopping experience.
             </p>
           </div>
           <img
-            className={styles.heroArtwork}
+            style={{
+              position: "absolute",
+              zIndex: 1,
+              right: -18,
+              bottom: -68,
+              width: "min(38%, 340px)",
+              pointerEvents: "none",
+              filter: "drop-shadow(0 18px 24px rgba(0, 0, 0, 0.35))",
+            }}
             src="/black-friday-gift.png"
             alt=""
             aria-hidden="true"
@@ -472,13 +724,17 @@ export default function CampaignSettingsPage() {
         )}
       </s-stack>
 
-      <div className={styles.contentLayout}>
-        <s-query-container>
-          <s-grid
-            gridTemplateColumns="minmax(0, 7fr) minmax(0, 3fr)"
-            gap="base"
-            alignItems="start"
-          >
+      <div style={{ marginTop: 20 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 7fr) minmax(280px, 3fr)",
+            columnGap: 16,
+            alignItems: "start",
+            width: "100%",
+          }}
+        >
+          <div style={{ gridColumn: "1 / 2", minWidth: 0 }}>
             <s-stack direction="block" gap="base" key={formVersion}>
               <s-section heading="Schedule">
                 <s-stack direction="block" gap="base">
@@ -499,7 +755,7 @@ export default function CampaignSettingsPage() {
                         error={errors.startDate}
                         required={form.enabled}
                         onChange={(event) =>
-                          update("startDate", event.currentTarget.value)
+                          update("startDate", event.currentTarget.value ?? "")
                         }
                       ></s-date-field>
                       <s-date-field
@@ -509,7 +765,7 @@ export default function CampaignSettingsPage() {
                         error={errors.endDate}
                         required={form.enabled}
                         onChange={(event) =>
-                          update("endDate", event.currentTarget.value)
+                          update("endDate", event.currentTarget.value ?? "")
                         }
                       ></s-date-field>
                       <div className={styles.enableControl}>
@@ -518,7 +774,10 @@ export default function CampaignSettingsPage() {
                           name="enabled"
                           defaultChecked={form.enabled}
                           onChange={(event) =>
-                            update("enabled", event.currentTarget.checked)
+                            update(
+                              "enabled",
+                              event.currentTarget.checked ?? false,
+                            )
                           }
                         ></s-switch>
                       </div>
@@ -526,7 +785,6 @@ export default function CampaignSettingsPage() {
                   </s-query-container>
                 </s-stack>
               </s-section>
-
               <s-box
                 padding="base"
                 background="subdued"
@@ -546,37 +804,97 @@ export default function CampaignSettingsPage() {
                     >
                       <s-stack direction="block" gap="small">
                         <s-text-area
-                          label="English checkout information"
-                          name="checkoutMessageEn"
-                          defaultValue={form.checkoutMessageEn}
-                          rows={5}
+                          label="English entry confirmation"
+                          name="checkoutEntryMessageEn"
+                          defaultValue={form.checkoutEntryMessageEn}
+                          rows={2}
                           maxLength={MAX_MESSAGE_LENGTH}
-                          error={errors.checkoutMessageEn}
+                          error={errors.checkoutEntryMessageEn}
                           onInput={(event) =>
                             update(
-                              "checkoutMessageEn",
-                              event.currentTarget.value,
+                              "checkoutEntryMessageEn",
+                              event.currentTarget.value ?? "",
+                            )
+                          }
+                        ></s-text-area>
+                        <s-text-area
+                          label="English ticket message"
+                          name="checkoutTicketMessageEn"
+                          defaultValue={form.checkoutTicketMessageEn}
+                          rows={2}
+                          maxLength={MAX_MESSAGE_LENGTH}
+                          error={errors.checkoutTicketMessageEn}
+                          onInput={(event) =>
+                            update(
+                              "checkoutTicketMessageEn",
+                              event.currentTarget.value ?? "",
+                            )
+                          }
+                        ></s-text-area>
+                        <s-text-area
+                          label="English motivation message"
+                          name="checkoutMotivationMessageEn"
+                          defaultValue={form.checkoutMotivationMessageEn}
+                          rows={2}
+                          maxLength={MAX_MESSAGE_LENGTH}
+                          error={errors.checkoutMotivationMessageEn}
+                          onInput={(event) =>
+                            update(
+                              "checkoutMotivationMessageEn",
+                              event.currentTarget.value ?? "",
                             )
                           }
                         ></s-text-area>
                       </s-stack>
                       <s-stack direction="block" gap="small">
                         <s-text-area
-                          label="French checkout information"
-                          name="checkoutMessageFr"
-                          defaultValue={form.checkoutMessageFr}
-                          rows={5}
+                          label="French entry confirmation"
+                          name="checkoutEntryMessageFr"
+                          defaultValue={form.checkoutEntryMessageFr}
+                          rows={2}
                           maxLength={MAX_MESSAGE_LENGTH}
-                          error={errors.checkoutMessageFr}
+                          error={errors.checkoutEntryMessageFr}
                           onInput={(event) =>
                             update(
-                              "checkoutMessageFr",
-                              event.currentTarget.value,
+                              "checkoutEntryMessageFr",
+                              event.currentTarget.value ?? "",
+                            )
+                          }
+                        ></s-text-area>
+                        <s-text-area
+                          label="French ticket message"
+                          name="checkoutTicketMessageFr"
+                          defaultValue={form.checkoutTicketMessageFr}
+                          rows={2}
+                          maxLength={MAX_MESSAGE_LENGTH}
+                          error={errors.checkoutTicketMessageFr}
+                          onInput={(event) =>
+                            update(
+                              "checkoutTicketMessageFr",
+                              event.currentTarget.value ?? "",
+                            )
+                          }
+                        ></s-text-area>
+                        <s-text-area
+                          label="French motivation message"
+                          name="checkoutMotivationMessageFr"
+                          defaultValue={form.checkoutMotivationMessageFr}
+                          rows={2}
+                          maxLength={MAX_MESSAGE_LENGTH}
+                          error={errors.checkoutMotivationMessageFr}
+                          onInput={(event) =>
+                            update(
+                              "checkoutMotivationMessageFr",
+                              event.currentTarget.value ?? "",
                             )
                           }
                         ></s-text-area>
                       </s-stack>
                     </s-grid>
+                    <s-paragraph color="subdued">
+                      Use {"{tickets}"} for this order and {"{total-tickets}"}
+                      for the customer total.
+                    </s-paragraph>
                   </s-query-container>
                 </s-stack>
               </s-box>
@@ -609,7 +927,7 @@ export default function CampaignSettingsPage() {
                           onInput={(event) =>
                             update(
                               "thankYouMessageEn",
-                              event.currentTarget.value,
+                              event.currentTarget.value ?? "",
                             )
                           }
                         ></s-text-area>
@@ -625,7 +943,7 @@ export default function CampaignSettingsPage() {
                           onInput={(event) =>
                             update(
                               "thankYouMessageFr",
-                              event.currentTarget.value,
+                              event.currentTarget.value ?? "",
                             )
                           }
                         ></s-text-area>
@@ -635,7 +953,17 @@ export default function CampaignSettingsPage() {
                 </s-stack>
               </s-box>
             </s-stack>
+          </div>
 
+          <div
+            style={{
+              gridColumn: "2 / 3",
+              minWidth: 0,
+              position: "sticky",
+              top: 16,
+              alignSelf: "start",
+            }}
+          >
             <s-section heading="Customer Experience Preview">
               <s-stack direction="block" gap="base">
                 <s-button-group accessibilityLabel="Preview language">
@@ -652,62 +980,18 @@ export default function CampaignSettingsPage() {
                     Français
                   </s-press-button>
                 </s-button-group>
-                <s-button-group accessibilityLabel="Preview mode">
-                  <s-press-button
-                    pressed={previewMode === "checkout"}
-                    onClick={() => setPreviewMode("checkout")}
-                  >
-                    Checkout
-                  </s-press-button>
-                  <s-press-button
-                    pressed={previewMode === "thankYou"}
-                    onClick={() => setPreviewMode("thankYou")}
-                  >
-                    Thank You
-                  </s-press-button>
-                </s-button-group>
-                <s-box background="subdued" borderRadius="base">
-                  <s-stack direction="block">
-                    <s-box
-                      padding="base"
-                      background="base"
-                      borderRadius="base"
-                      border="base"
-                    >
-                      <s-stack direction="block" gap="base">
-                        <s-stack
-                          direction="inline"
-                          gap="small"
-                          alignItems="center"
-                        >
-                          <s-icon type="store" tone="neutral"></s-icon>
-                          <s-text type="strong">{loaderData.shopName}</s-text>
-                        </s-stack>
-
-                        <s-box
-                          padding="base"
-                          background="subdued"
-                          borderRadius="base"
-                          border="base"
-                        >
-                          <s-stack
-                            direction="inline"
-                            gap="base"
-                            alignItems="start"
-                          >
-                            <s-stack direction="block" gap="small">
-                              <s-text type="strong">
-                                Black Friday Giveaway
-                              </s-text>
-                              <s-paragraph>
-                                {previewMessage ||
-                                  "Your customer-facing message will appear here."}
-                              </s-paragraph>
-                            </s-stack>
-                          </s-stack>
-                        </s-box>
-                      </s-stack>
-                    </s-box>
+                <s-box
+                  padding="small"
+                  background="subdued"
+                  borderRadius="base"
+                  border="base"
+                >
+                  <s-stack direction="block" gap="none">
+                    <s-text>{checkoutPreview.confirmation}</s-text>
+                    <s-text type="strong">{checkoutPreview.tickets}</s-text>
+                    <s-text color="subdued">
+                      {checkoutPreview.motivation}
+                    </s-text>
                   </s-stack>
                 </s-box>
                 <s-paragraph color="subdued">
@@ -715,8 +999,35 @@ export default function CampaignSettingsPage() {
                 </s-paragraph>
               </s-stack>
             </s-section>
-          </s-grid>
-        </s-query-container>
+
+            <div style={{ marginTop: 16 }}>
+              <s-section heading="Thank You Page Preview">
+                <s-box
+                  padding="small"
+                  background="subdued"
+                  borderRadius="base"
+                  border="base"
+                >
+                  <s-stack direction="block" gap="small">
+                    {thankYouPreviewLines.map((line, index) =>
+                      index === 0 || line.includes("🎟️") ? (
+                        <s-text type="strong" key={`${index}-${line}`}>
+                          {line}
+                        </s-text>
+                      ) : (
+                        <s-text key={`${index}-${line}`}>{line}</s-text>
+                      ),
+                    )}
+                  </s-stack>
+                </s-box>
+                <s-paragraph color="subdued">
+                  Preview only. The Shopify cart total replaces{" "}
+                  {"{tickets-num}"}.
+                </s-paragraph>
+              </s-section>
+            </div>
+          </div>
+        </div>
       </div>
     </s-page>
   );

@@ -1,0 +1,3 @@
+ALTER TABLE `CampaignSettings`
+  ADD COLUMN `maxWinners` INTEGER UNSIGNED NOT NULL DEFAULT 1,
+  ADD COLUMN `preventRepeatWinner` BOOLEAN NOT NULL DEFAULT false;
