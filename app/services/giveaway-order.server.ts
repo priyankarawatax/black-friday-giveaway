@@ -22,9 +22,13 @@ export type GiveawayOrder = {
 };
 
 export type GiveawayOrderResult =
-  | { status: "created"; tickets: number }
-  | { status: "duplicate"; tickets: number }
+  | { status: "created"; tickets: number; klaviyoEventUniqueId: string | null }
+  | { status: "duplicate"; tickets: number; klaviyoEventUniqueId: string | null }
   | { status: "ineligible"; reason: string };
+
+type PersistGiveawayOrderOptions = {
+  queueKlaviyoEvent?: boolean;
+};
 
 type ShopifyOrderWebhookPayload = {
   id?: string | number;
@@ -124,10 +128,17 @@ export function orderFromGraphql(order: ShopifyOrderGraphqlNode): GiveawayOrder 
 export async function persistGiveawayOrder(
   shop: string,
   order: GiveawayOrder,
+  options: PersistGiveawayOrderOptions = {},
 ): Promise<GiveawayOrderResult> {
   const campaign = await prisma.campaignSettings.findUnique({
     where: { shop },
-    select: { id: true, enabled: true, startDate: true, endDate: true },
+    select: {
+      id: true,
+      campaignName: true,
+      enabled: true,
+      startDate: true,
+      endDate: true,
+    },
   });
 
   if (!campaign?.enabled || !campaign.startDate || !campaign.endDate) {
@@ -155,10 +166,18 @@ export async function persistGiveawayOrder(
 
       const existing = await tx.giveawayEntry.findUnique({
         where: { shop_shopifyOrderId: { shop, shopifyOrderId: order.id } },
-        select: { id: true, _count: { select: { tickets: true } } },
+        select: {
+          id: true,
+          _count: { select: { tickets: true } },
+          klaviyoEvents: { select: { uniqueId: true }, take: 1 },
+        },
       });
       if (existing) {
-        return { status: "duplicate", tickets: existing._count.tickets } as const;
+        return {
+          status: "duplicate",
+          tickets: existing._count.tickets,
+          klaviyoEventUniqueId: existing.klaviyoEvents[0]?.uniqueId ?? null,
+        } as const;
       }
 
       const [lastTicket] = await tx.$queryRaw<Array<{ ticketNumber: bigint | number | null }>>(
@@ -204,7 +223,49 @@ export async function persistGiveawayOrder(
         });
       }
 
-      return { status: "created", tickets: ticketCount } as const;
+      let klaviyoEventUniqueId: string | null = null;
+      if (options.queueKlaviyoEvent && order.customerEmail) {
+        const totalTickets = await tx.giveawayTicket.count({
+          where: {
+            shop,
+            campaignId: campaign.id,
+            status: "VALID",
+            entry: { shopifyCustomerId: order.customerId },
+          },
+        });
+        const firstTicketNumber = formatTicketNumber(firstTicket);
+        const lastTicketNumber = formatTicketNumber(firstTicket + ticketCount - 1);
+        klaviyoEventUniqueId = `giveaway:${campaign.id.toString()}:${order.id}`;
+
+        await tx.klaviyoEventOutbox.create({
+          data: {
+            shop,
+            campaignId: campaign.id,
+            entryId: entry.id,
+            uniqueId: klaviyoEventUniqueId,
+            metricName: "Giveaway Tickets Confirmed",
+            payload: {
+              email: order.customerEmail,
+              customerName: order.customerName,
+              orderNumber: order.number,
+              orderId: order.id,
+              orderDate: order.processedAt.toISOString(),
+              campaignName: campaign.campaignName,
+              ticketsEarned: ticketCount,
+              totalTickets,
+              firstTicket: firstTicketNumber,
+              lastTicket: lastTicketNumber,
+              ticketRange: `${firstTicketNumber} - ${lastTicketNumber}`,
+            },
+          },
+        });
+      }
+
+      return {
+        status: "created",
+        tickets: ticketCount,
+        klaviyoEventUniqueId,
+      } as const;
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30_000 },
   );

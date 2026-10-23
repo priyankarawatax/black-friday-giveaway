@@ -19,8 +19,12 @@ export function isCampaignActive(config, now = Date.now()) {
   );
 }
 
-export function getCheckoutMessage(config, countryCode) {
-  return getCheckoutMessages(config, countryCode).entry;
+export function getCheckoutMessage(config, languageCode) {
+  return getCheckoutMessages(config, languageCode).entry;
+}
+
+export function isFrenchLanguage(languageCode) {
+  return String(languageCode ?? "").toLowerCase().split("-")[0] === "fr";
 }
 
 function normalizeMessageSet(value) {
@@ -34,10 +38,10 @@ function normalizeMessageSet(value) {
   };
 }
 
-export function getCheckoutMessages(config, countryCode) {
+export function getCheckoutMessages(config, languageCode) {
   const english = normalizeMessageSet(config?.messages?.en);
   const french = normalizeMessageSet(config?.messages?.fr);
-  if (countryCode !== "FR") return english;
+  if (!isFrenchLanguage(languageCode)) return english;
   return {
     entry: french.entry || english.entry,
     tickets: french.tickets || english.tickets,

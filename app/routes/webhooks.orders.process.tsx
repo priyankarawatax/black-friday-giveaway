@@ -19,7 +19,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response();
   }
 
-  const result = await persistGiveawayOrder(shop, order);
+  const result = await persistGiveawayOrder(shop, order, {
+    queueKlaviyoEvent: true,
+  });
   console.log(
     `Processed ${topic} for ${shop}, order ${order.number}: ${result.status}`,
   );

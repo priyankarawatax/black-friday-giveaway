@@ -3,6 +3,7 @@ import { render } from "preact";
 
 import {
   getTicketCountFromTotal,
+  isFrenchLanguage,
   isCampaignActive,
   parseCampaignConfig,
   renderThankYouMessage,
@@ -22,8 +23,8 @@ function ThankYouBlock() {
   );
   const config = parseCampaignConfig(entry?.metafield?.value);
   const orderId = shopify.orderConfirmation.value?.order?.id;
-  const countryCode = shopify.localization.country.value?.isoCode;
-  const french = countryCode === "FR";
+  const languageCode = shopify.localization.language.value?.isoCode;
+  const french = isFrenchLanguage(languageCode);
   const configuredTemplate = french
     ? config?.thankYouMessages?.fr || config?.thankYouMessages?.en
     : config?.thankYouMessages?.en;

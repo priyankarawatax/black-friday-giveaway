@@ -25,8 +25,8 @@ function Extension() {
   );
   const config = parseCampaignConfig(entry?.metafield?.value);
   const campaignActive = isCampaignActive(config, Date.now());
-  const countryCode = shopify.localization.country.value?.isoCode;
-  const checkoutMessages = getCheckoutMessages(config, countryCode);
+  const languageCode = shopify.localization.language.value?.isoCode;
+  const checkoutMessages = getCheckoutMessages(config, languageCode);
   const previousTickets = usePreviousTicketCount(
     campaignActive ? config?.ticketTotalUrl : null,
   );

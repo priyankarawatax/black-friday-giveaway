@@ -51,19 +51,20 @@ test("expired campaign is hidden", () => {
   );
 });
 
-test("France receives French", () => {
-  assert.equal(getCheckoutMessage(activeConfig, "FR"), "Message français");
+test("French checkout language receives French", () => {
+  assert.equal(getCheckoutMessage(activeConfig, "fr-FR"), "Message français");
+  assert.equal(getCheckoutMessage(activeConfig, "fr-CA"), "Message français");
 });
 
-test("other countries receive English", () => {
-  assert.equal(getCheckoutMessage(activeConfig, "CA"), "English message");
+test("non-French checkout languages receive English", () => {
+  assert.equal(getCheckoutMessage(activeConfig, "en-CA"), "English message");
 });
 
 test("missing French falls back to English", () => {
   assert.equal(
     getCheckoutMessage(
       { ...activeConfig, messages: { en: "English message", fr: "" } },
-      "FR",
+      "fr",
     ),
     "English message",
   );
@@ -85,7 +86,7 @@ test("configured checkout lines use French with English field fallbacks", () => 
       },
     },
   };
-  assert.deepEqual(getCheckoutMessages(config, "FR"), {
+  assert.deepEqual(getCheckoutMessages(config, "fr-BE"), {
     entry: "Entrée française",
     tickets: "English {tickets}",
     motivation: "Motivation française",

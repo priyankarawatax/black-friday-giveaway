@@ -34,55 +34,80 @@ model Session {
 }
 
 model CampaignSettings {
-  id                       BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
-  shop                     String           @unique @db.VarChar(191)
-  campaignName             String           @db.VarChar(255)
+  id                       BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  shop                     String               @unique @db.VarChar(191)
+  campaignName             String               @db.VarChar(255)
   startDate                DateTime?
   endDate                  DateTime?
-  timezone                 String           @db.VarChar(191)
-  enabled                  Boolean          @default(false)
-  englishMessage           String           @db.Text
-  frenchMessage            String           @db.Text
-  englishTicketMessage     String           @db.Text
-  frenchTicketMessage      String           @db.Text
-  englishMotivationMessage String           @db.Text
-  frenchMotivationMessage  String           @db.Text
-  englishThankYouMessage   String           @db.Text
-  frenchThankYouMessage    String           @db.Text
-  maxWinners               Int              @default(1) @db.UnsignedInt
-  preventRepeatWinner      Boolean          @default(false)
-  showWinnerRemoveAction   Boolean          @default(true)
-  createdAt                DateTime         @default(now())
-  updatedAt                DateTime         @updatedAt
+  timezone                 String               @db.VarChar(191)
+  enabled                  Boolean              @default(false)
+  englishMessage           String               @db.Text
+  frenchMessage            String               @db.Text
+  englishTicketMessage     String               @db.Text
+  frenchTicketMessage      String               @db.Text
+  englishMotivationMessage String               @db.Text
+  frenchMotivationMessage  String               @db.Text
+  englishThankYouMessage   String               @db.Text
+  frenchThankYouMessage    String               @db.Text
+  maxWinners               Int                  @default(1) @db.UnsignedInt
+  preventRepeatWinner      Boolean              @default(false)
+  showWinnerRemoveAction   Boolean              @default(true)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
   entries                  GiveawayEntry[]
   tickets                  GiveawayTicket[]
   winners                  GiveawayWinner[]
+  klaviyoEvents            KlaviyoEventOutbox[]
 }
 
 model GiveawayEntry {
-  id                BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
-  shop              String           @db.VarChar(191)
-  campaignId        BigInt           @db.UnsignedBigInt
-  shopifyCustomerId String           @db.VarChar(191)
-  customerName      String           @db.VarChar(255)
-  customerEmail     String           @db.VarChar(320)
-  shopifyOrderId    String           @db.VarChar(191)
-  orderNumber       String           @db.VarChar(191)
+  id                BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  shop              String               @db.VarChar(191)
+  campaignId        BigInt               @db.UnsignedBigInt
+  shopifyCustomerId String               @db.VarChar(191)
+  customerName      String               @db.VarChar(255)
+  customerEmail     String               @db.VarChar(320)
+  shopifyOrderId    String               @db.VarChar(191)
+  orderNumber       String               @db.VarChar(191)
   orderDate         DateTime
-  eligibleAmount    Decimal          @db.Decimal(18, 2)
-  currencyCode      String           @db.VarChar(3)
-  source            String           @default("SHOPIFY_ORDER") @db.VarChar(64)
-  status            String           @default("ELIGIBLE") @db.VarChar(32)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  campaign          CampaignSettings @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  eligibleAmount    Decimal              @db.Decimal(18, 2)
+  currencyCode      String               @db.VarChar(3)
+  source            String               @default("SHOPIFY_ORDER") @db.VarChar(64)
+  status            String               @default("ELIGIBLE") @db.VarChar(32)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  campaign          CampaignSettings     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   tickets           GiveawayTicket[]
   winners           GiveawayWinner[]
+  klaviyoEvents     KlaviyoEventOutbox[]
 
   @@unique([shop, shopifyOrderId])
   @@index([shop, campaignId, status, orderDate])
   @@index([shop, shopifyCustomerId])
   @@index([shop, customerEmail])
+}
+
+model KlaviyoEventOutbox {
+  id            BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shop          String           @db.VarChar(191)
+  campaignId    BigInt           @db.UnsignedBigInt
+  entryId       BigInt           @db.UnsignedBigInt
+  uniqueId      String           @unique @db.VarChar(512)
+  metricName    String           @db.VarChar(191)
+  payload       Json
+  status        String           @default("PENDING") @db.VarChar(32)
+  attempts      Int              @default(0) @db.UnsignedInt
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  lastError     String?          @db.Text
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  campaign      CampaignSettings @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  entry         GiveawayEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@unique([shop, entryId])
+  @@index([status, nextAttemptAt])
+  @@index([shop, campaignId, status])
 }
 
 model GiveawayTicket {
