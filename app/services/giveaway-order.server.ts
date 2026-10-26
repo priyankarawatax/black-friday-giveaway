@@ -17,7 +17,7 @@ export type GiveawayOrder = {
   customerId: string;
   customerName: string;
   customerEmail: string;
-  totalAmount: string;
+  subtotalAmount: string;
   currencyCode: string;
 };
 
@@ -39,8 +39,8 @@ type ShopifyOrderWebhookPayload = {
   created_at?: string;
   contact_email?: string;
   email?: string;
-  current_total_price?: string;
-  total_price?: string;
+  current_subtotal_price?: string;
+  subtotal_price?: string;
   currency?: string;
   customer?: {
     id?: string | number;
@@ -64,7 +64,7 @@ export type ShopifyOrderGraphqlNode = {
     displayName: string;
     defaultEmailAddress?: { emailAddress: string } | null;
   } | null;
-  currentTotalPriceSet: {
+  currentSubtotalPriceSet: {
     shopMoney: { amount: string; currencyCode: string };
   };
 };
@@ -100,7 +100,8 @@ export function orderFromWebhook(payload: unknown): GiveawayOrder | null {
     customerId,
     customerName,
     customerEmail: email,
-    totalAmount: clean(order.current_total_price) || clean(order.total_price) || "0",
+    subtotalAmount:
+      clean(order.current_subtotal_price) || clean(order.subtotal_price) || "0",
     currencyCode: clean(order.currency).toUpperCase() || "USD",
   };
 }
@@ -120,8 +121,8 @@ export function orderFromGraphql(order: ShopifyOrderGraphqlNode): GiveawayOrder 
       (email ? `guest:${email.toLowerCase()}` : `order:${order.id}`),
     customerName: clean(order.customer?.displayName) || email || "Guest customer",
     customerEmail: email,
-    totalAmount: order.currentTotalPriceSet.shopMoney.amount,
-    currencyCode: order.currentTotalPriceSet.shopMoney.currencyCode,
+    subtotalAmount: order.currentSubtotalPriceSet.shopMoney.amount,
+    currencyCode: order.currentSubtotalPriceSet.shopMoney.currencyCode,
   };
 }
 
@@ -148,12 +149,12 @@ export async function persistGiveawayOrder(
     return { status: "ineligible", reason: "Order is outside the campaign dates." };
   }
 
-  const numericAmount = Number(order.totalAmount);
+  const numericAmount = Number(order.subtotalAmount);
   const ticketCount = Number.isFinite(numericAmount) && numericAmount > 0
     ? Math.floor(numericAmount)
     : 0;
   if (ticketCount < 1) {
-    return { status: "ineligible", reason: "Order total does not earn a ticket." };
+    return { status: "ineligible", reason: "Order subtotal does not earn a ticket." };
   }
 
   return prisma.$transaction(
@@ -204,7 +205,7 @@ export async function persistGiveawayOrder(
           shopifyOrderId: order.id,
           orderNumber: order.number,
           orderDate: order.processedAt,
-          eligibleAmount: new Prisma.Decimal(order.totalAmount),
+          eligibleAmount: new Prisma.Decimal(order.subtotalAmount),
           currencyCode: order.currencyCode.slice(0, 3),
           status: "CONFIRMED",
         },

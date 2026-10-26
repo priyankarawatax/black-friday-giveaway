@@ -112,7 +112,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               createdAt
               email
               customer { id displayName defaultEmailAddress { emailAddress } }
-              currentTotalPriceSet { shopMoney { amount currencyCode } }
+              currentSubtotalPriceSet { shopMoney { amount currencyCode } }
             }
             pageInfo { hasNextPage endCursor }
           }

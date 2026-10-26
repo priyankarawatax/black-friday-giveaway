@@ -34,7 +34,7 @@ function Extension() {
   if (!campaignActive) return null;
 
   const orderTickets = getTicketCountFromTotal(
-    shopify.cost.totalAmount.value?.amount,
+    shopify.cost.subtotalAmount.value?.amount,
   );
   const ticketSummary = getTicketSummary(orderTickets, previousTickets);
   const entryMessage =

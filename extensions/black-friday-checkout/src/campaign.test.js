@@ -104,7 +104,7 @@ test("ticket placeholders map to order tickets then accumulated total", () => {
   );
 });
 
-test("thank-you ticket placeholder maps to the Shopify cart total", () => {
+test("thank-you ticket placeholder maps to the Shopify cart subtotal", () => {
   assert.equal(
     renderThankYouMessage("You earn total {tickets-num} tickets.", 47),
     "You earn total 47 tickets.",
@@ -120,7 +120,7 @@ test("missing or malformed settings are handled safely", () => {
   assert.equal(isCampaignActive(parseCampaignConfig("not-json"), now), false);
 });
 
-test("checkout total determines the whole ticket count", () => {
+test("checkout subtotal determines the whole ticket count", () => {
   assert.equal(getTicketCountFromTotal(200), 200);
   assert.equal(getTicketCountFromTotal("200.75"), 200);
   assert.equal(getTicketCountFromTotal(0), 0);

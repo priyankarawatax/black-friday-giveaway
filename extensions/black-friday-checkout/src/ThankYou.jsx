@@ -28,8 +28,8 @@ function ThankYouBlock() {
   const configuredTemplate = french
     ? config?.thankYouMessages?.fr || config?.thankYouMessages?.en
     : config?.thankYouMessages?.en;
-  const cartTotal = shopify.cost.totalAmount.value?.amount;
-  const ticketCount = getTicketCountFromTotal(cartTotal);
+  const cartSubtotal = shopify.cost.subtotalAmount.value?.amount;
+  const ticketCount = getTicketCountFromTotal(cartSubtotal);
 
   if (!isCampaignActive(config) || !orderId || !configuredTemplate) return null;
 
