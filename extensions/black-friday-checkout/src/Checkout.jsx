@@ -58,10 +58,13 @@ function Extension() {
       padding="small"
       accessibilityLabel={entryMessage}
     >
-      <s-stack direction="block" gap="none">
-        <s-text>{entryMessage}</s-text>
-        <s-text type="strong">{ticketMessage}</s-text>
-        <s-text color="subdued">{motivationMessage}</s-text>
+      <s-stack direction="inline" gap="small" alignItems="start">
+        <s-icon type="info" size="small" tone="info" />
+        <s-stack direction="block" gap="none">
+          <s-text>{entryMessage}</s-text>
+          <s-text type="strong">{ticketMessage}</s-text>
+          <s-text color="subdued">{motivationMessage}</s-text>
+        </s-stack>
       </s-stack>
     </s-box>
   );
