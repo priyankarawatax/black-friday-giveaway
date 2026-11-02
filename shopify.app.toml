@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "e410089d3d85248f39089fc6dac682c9"
-name = "Black Friday giveaway"
-application_url = "https://example.com"
+client_id = "7e5518f46849f219153c2fb733d8f3ee"
+name = "Black Friday Giveaway"
+application_url = "https://giveaway.united-vintage.com"
 embedded = true
 
 [build]
@@ -21,14 +21,16 @@ api_version = "2026-07"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/orders/process"
-  topics = [ "orders/paid", "orders/fulfilled" ]
+  topics = [ "orders/fulfilled", "orders/paid" ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_customers,read_orders,write_products,write_metaobjects,write_metaobject_definitions"
+scopes = "read_customers,read_orders,write_metaobject_definitions,write_metaobjects,write_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
