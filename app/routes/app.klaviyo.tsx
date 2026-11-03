@@ -312,14 +312,14 @@ export default function KlaviyoSettingsPage() {
               </s-paragraph>
             )}
 
-            <s-button-group>
+            <s-stack direction="inline" gap="base" alignItems="center">
               <s-button variant="primary" disabled={busy} onClick={() => submit("save")}>
                 Save settings
               </s-button>
               <s-button disabled={busy} onClick={() => submit("test")}>
                 Test connection
               </s-button>
-            </s-button-group>
+            </s-stack>
           </s-stack>
         </s-section>
       </s-stack>
