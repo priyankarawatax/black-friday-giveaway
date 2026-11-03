@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
+import { giveawayShopPool } from "./giveaway-stores";
 
 const ENTRY_STATUSES = ["ELIGIBLE", "CONFIRMED"];
 
@@ -49,6 +50,7 @@ export async function winnerView(winner: WinnerWithDetails) {
   return {
     id: winner.id.toString(),
     drawId: winner.drawId,
+    shop: winner.shop,
     ticketNumber: winner.ticket.ticketNumber,
     customerId: winner.entry.shopifyCustomerId,
     customerName: winner.entry.customerName,
@@ -77,20 +79,23 @@ export async function selectLuckyWinner({
     );
   }
 
+  const shopPool = giveawayShopPool(shop);
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const winner = await prisma.$transaction(
         async (tx) => {
-          const existing = await tx.giveawayWinner.findUnique({
-            where: { shop_drawId: { shop, drawId } },
+          const existing = await tx.giveawayWinner.findFirst({
+            where: { shop: { in: shopPool }, drawId },
             include: winnerInclude,
           });
           if (existing) return existing;
 
-          const campaign = await tx.campaignSettings.findUnique({
-            where: { shop },
+          const campaigns = await tx.campaignSettings.findMany({
+            where: { shop: { in: shopPool } },
             select: {
               id: true,
+              shop: true,
               enabled: true,
               startDate: true,
               endDate: true,
@@ -98,6 +103,7 @@ export async function selectLuckyWinner({
               preventRepeatWinner: true,
             },
           });
+          const campaign = campaigns.find((item) => item.shop === shop);
           if (!campaign?.enabled || !campaign.startDate || !campaign.endDate) {
             throw new LuckyDrawError(
               "The giveaway is disabled or has no valid schedule.",
@@ -113,14 +119,25 @@ export async function selectLuckyWinner({
 
           await tx.$queryRaw(Prisma.sql`
             SELECT id FROM CampaignSettings
-            WHERE id = ${campaign.id} AND shop = ${shop}
+            WHERE shop IN (${Prisma.join(shopPool)})
+            ORDER BY id
             FOR UPDATE
           `);
 
+          const eligibleCampaignIds = campaigns
+            .filter(
+              (item) =>
+                item.enabled &&
+                item.startDate &&
+                item.endDate &&
+                new Date() >= item.startDate,
+            )
+            .map(({ id }) => id);
+
           const completedDraws = await tx.giveawayWinner.count({
             where: {
-              shop,
-              campaignId: campaign.id,
+              shop: { in: shopPool },
+              campaignId: { in: campaigns.map(({ id }) => id) },
               status: "CONFIRMED",
             },
           });
@@ -134,7 +151,11 @@ export async function selectLuckyWinner({
           const previousCustomerIds = campaign.preventRepeatWinner
             ? (
                 await tx.giveawayWinner.findMany({
-                  where: { shop, campaignId: campaign.id, status: "CONFIRMED" },
+                  where: {
+                    shop: { in: shopPool },
+                    campaignId: { in: campaigns.map(({ id }) => id) },
+                    status: "CONFIRMED",
+                  },
                   select: { customerId: true },
                   distinct: ["customerId"],
                 })
@@ -142,12 +163,12 @@ export async function selectLuckyWinner({
             : [];
 
           const ticketWhere: Prisma.GiveawayTicketWhereInput = {
-            shop,
-            campaignId: campaign.id,
+            shop: { in: shopPool },
+            campaignId: { in: eligibleCampaignIds },
             status: "VALID",
             winners: { none: {} },
             entry: {
-              shop,
+              shop: { in: shopPool },
               status: { in: ENTRY_STATUSES },
               ...(previousCustomerIds.length
                 ? { shopifyCustomerId: { notIn: previousCustomerIds } }
@@ -171,7 +192,13 @@ export async function selectLuckyWinner({
             where: ticketWhere,
             orderBy: { id: "asc" },
             skip: offset,
-            select: { id: true, entryId: true, entry: true },
+            select: {
+              id: true,
+              shop: true,
+              campaignId: true,
+              entryId: true,
+              entry: true,
+            },
           });
           if (!winningTicket) {
             throw new LuckyDrawError(
@@ -182,8 +209,8 @@ export async function selectLuckyWinner({
 
           return tx.giveawayWinner.create({
             data: {
-              shop,
-              campaignId: campaign.id,
+              shop: winningTicket.shop,
+              campaignId: winningTicket.campaignId,
               ticketId: winningTicket.id,
               entryId: winningTicket.entryId,
               customerId: winningTicket.entry.shopifyCustomerId,

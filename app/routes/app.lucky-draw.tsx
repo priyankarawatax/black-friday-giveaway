@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
 import styles from "../lucky-draw.module.css";
+import { giveawayShopPool } from "../services/giveaway-stores";
 import {
   LuckyDrawError,
   selectLuckyWinner,
@@ -42,6 +43,7 @@ function csvCell(value: unknown) {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  const shopPool = giveawayShopPool(session.shop);
   const formData = await request.formData();
   const intent = formData.get("intent");
   if (intent === "remove-winner") {
@@ -55,7 +57,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const result = await prisma.giveawayWinner.updateMany({
       where: {
         id: BigInt(winnerId),
-        shop: session.shop,
+        shop: { in: shopPool },
         status: "CONFIRMED",
       },
       data: { status: "REMOVED" },
@@ -85,7 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
     const result = await prisma.campaignSettings.updateMany({
-      where: { shop: session.shop },
+      where: { shop: { in: shopPool } },
       data: {
         maxWinners,
         preventRepeatWinner: formData.get("preventRepeatWinner") === "true",
@@ -140,11 +142,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  const shopPool = giveawayShopPool(session.shop);
   const url = new URL(request.url);
-  const campaign = await prisma.campaignSettings.findUnique({
-    where: { shop: session.shop },
+  const campaigns = await prisma.campaignSettings.findMany({
+    where: { shop: { in: shopPool } },
     select: {
       id: true,
+      shop: true,
       campaignName: true,
       enabled: true,
       startDate: true,
@@ -155,6 +159,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       showWinnerRemoveAction: true,
     },
   });
+  const campaign = campaigns.find((item) => item.shop === session.shop) ?? null;
+  const campaignIds = campaigns.map(({ id }) => id);
 
   if (url.searchParams.get("export") === "winner") {
     const winnerId = url.searchParams.get("winnerId");
@@ -162,7 +168,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       throw new Response("Winner not found", { status: 404 });
     }
     const winner = await prisma.giveawayWinner.findFirst({
-      where: { id: BigInt(winnerId), shop: session.shop },
+      where: { id: BigInt(winnerId), shop: { in: shopPool } },
       include: {
         campaign: { select: { campaignName: true } },
         ticket: { select: { ticketNumber: true } },
@@ -182,6 +188,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         "Customer name",
         "Customer email",
         "Order number",
+        "Customer store",
         "Giveaway",
         "Draw date",
         "Status",
@@ -191,6 +198,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         winner.entry.customerName,
         winner.entry.customerEmail,
         winner.entry.orderNumber,
+        storeLabel(winner.shop),
         winner.campaign.campaignName,
         winner.drawnAt.toISOString(),
         winner.status,
@@ -221,8 +229,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const ticketWhere = {
-    shop: session.shop,
-    campaignId: campaign.id,
+    shop: { in: shopPool },
+    campaignId: { in: campaignIds },
     status: "VALID",
     entry: { status: { in: ENTRY_STATUSES } },
   } satisfies Prisma.GiveawayTicketWhereInput;
@@ -232,16 +240,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       prisma.giveawayEntry.groupBy({
         by: ["shopifyCustomerId"],
         where: {
-          shop: session.shop,
-          campaignId: campaign.id,
+          shop: { in: shopPool },
+          campaignId: { in: campaignIds },
           status: { in: ENTRY_STATUSES },
           tickets: { some: { status: "VALID" } },
         },
       }),
       prisma.giveawayWinner.count({
         where: {
-          shop: session.shop,
-          campaignId: campaign.id,
+          shop: { in: shopPool },
+          campaignId: { in: campaignIds },
           status: "CONFIRMED",
         },
       }),
@@ -253,8 +261,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }),
       prisma.giveawayWinner.findMany({
         where: {
-          shop: session.shop,
-          campaignId: campaign.id,
+          shop: { in: shopPool },
+          campaignId: { in: campaignIds },
           status: "CONFIRMED",
         },
         orderBy: { drawnAt: "desc" },
@@ -327,9 +335,20 @@ function segmentPath(index: number) {
   return `M 250 250 L ${start.x} ${start.y} A 220 220 0 0 1 ${end.x} ${end.y} Z`;
 }
 
-function customerAdminUrl(customerId: string) {
+function customerAdminUrl(customerId: string, shop: string) {
   const match = customerId.match(/Customer\/(\d+)$/);
-  return match ? `shopify://admin/customers/${match[1]}` : null;
+  const shopHandle = shop.split(".")[0];
+  return match && shopHandle
+    ? `https://admin.shopify.com/store/${shopHandle}/customers/${match[1]}`
+    : null;
+}
+
+function storeLabel(shop: string) {
+  return shop === "unitedvintageuk.myshopify.com"
+    ? "United Vintage UK"
+    : shop === "benoit-vintage.myshopify.com"
+      ? "United Vintage"
+      : shop;
 }
 
 export default function LuckyDrawPage() {
@@ -831,6 +850,11 @@ export default function LuckyDrawPage() {
                           <s-text>{winner.campaignName}</s-text>
                         </div>
                         <div className={styles.detailItem}>
+                          <s-text color="subdued">Customer store</s-text>
+                          <br />
+                          <s-text>{storeLabel(winner.shop)}</s-text>
+                        </div>
+                        <div className={styles.detailItem}>
                           <s-text color="subdued">Draw date</s-text>
                           <br />
                           <s-text>
@@ -841,9 +865,12 @@ export default function LuckyDrawPage() {
                       <s-button-group>
                         <s-button
                           href={
-                            customerAdminUrl(winner.customerId) ?? undefined
+                            customerAdminUrl(winner.customerId, winner.shop) ??
+                            undefined
                           }
-                          disabled={!customerAdminUrl(winner.customerId)}
+                          disabled={
+                            !customerAdminUrl(winner.customerId, winner.shop)
+                          }
                         >
                           View Customer
                         </s-button>
@@ -884,6 +911,7 @@ export default function LuckyDrawPage() {
                   <s-table-header-row>
                     <s-table-header listSlot="primary">Ticket</s-table-header>
                     <s-table-header listSlot="labeled">Customer</s-table-header>
+                    <s-table-header>Store</s-table-header>
                     <s-table-header>Order</s-table-header>
                     <s-table-header>Draw date</s-table-header>
                     <s-table-header>Status</s-table-header>
@@ -898,6 +926,7 @@ export default function LuckyDrawPage() {
                           <s-text type="strong">{item.ticketNumber}</s-text>
                         </s-table-cell>
                         <s-table-cell>{item.customerName}</s-table-cell>
+                        <s-table-cell>{storeLabel(item.shop)}</s-table-cell>
                         <s-table-cell>{item.orderNumber}</s-table-cell>
                         <s-table-cell>
                           {new Date(item.drawnAt).toLocaleDateString()}
