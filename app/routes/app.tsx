@@ -19,9 +19,9 @@ export default function App() {
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
         <s-link href="/app">Campaign settings</s-link>
-        <s-link href="/app/klaviyo">Klaviyo</s-link>
         <s-link href="/app/customer-tickets">Customer Tickets</s-link>
         <s-link href="/app/lucky-draw">Lucky Draw</s-link>
+        <s-link href="/app/klaviyo">Klaviyo</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>

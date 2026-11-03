@@ -4,11 +4,20 @@ import prisma from "../db.server";
 import { getKlaviyoQueueConfig } from "./klaviyo-config.server";
 
 const TICKET_BATCH_SIZE = 1_000;
-const TICKET_PREFIX = "UVT-";
+const DEFAULT_TICKET_PREFIX = "UVT-";
+const UK_TICKET_PREFIX = "UVT-UK-";
+const UK_STORE_HANDLE = "unitedvintageuk";
 const FIRST_TICKET_SEQUENCE = 100_000;
 
-export function formatTicketNumber(sequence: number) {
-  return `${TICKET_PREFIX}${String(sequence).padStart(6, "0")}`;
+function ticketPrefixForShop(shop: string) {
+  const shopHandle = shop.trim().toLowerCase().split(".")[0];
+  return shopHandle === UK_STORE_HANDLE
+    ? UK_TICKET_PREFIX
+    : DEFAULT_TICKET_PREFIX;
+}
+
+export function formatTicketNumber(shop: string, sequence: number) {
+  return `${ticketPrefixForShop(shop)}${String(sequence).padStart(6, "0")}`;
 }
 
 export type GiveawayOrder = {
@@ -193,7 +202,7 @@ export async function persistGiveawayOrder(
           ) AS ticketNumber
           FROM GiveawayTicket
           WHERE campaignId = ${campaign.id}
-            AND ticketNumber REGEXP '^(UVT-)?[0-9]+$'
+            AND ticketNumber REGEXP '^(UVT-|UVT-UK-)?[0-9]+$'
         `,
       );
       const firstTicket = Math.max(
@@ -223,7 +232,7 @@ export async function persistGiveawayOrder(
             shop,
             campaignId: campaign.id,
             entryId: entry.id,
-            ticketNumber: formatTicketNumber(firstTicket + offset + index),
+            ticketNumber: formatTicketNumber(shop, firstTicket + offset + index),
             status: "VALID",
           })),
         });
@@ -239,8 +248,11 @@ export async function persistGiveawayOrder(
             entry: { shopifyCustomerId: order.customerId },
           },
         });
-        const firstTicketNumber = formatTicketNumber(firstTicket);
-        const lastTicketNumber = formatTicketNumber(firstTicket + ticketCount - 1);
+        const firstTicketNumber = formatTicketNumber(shop, firstTicket);
+        const lastTicketNumber = formatTicketNumber(
+          shop,
+          firstTicket + ticketCount - 1,
+        );
         klaviyoEventUniqueId = `giveaway:${campaign.id.toString()}:${order.id}`;
 
         await tx.klaviyoEventOutbox.create({
