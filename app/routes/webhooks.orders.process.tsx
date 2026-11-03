@@ -4,15 +4,21 @@ import { orderFromWebhook, persistGiveawayOrder } from "../services/giveaway-ord
 import { processKlaviyoOutbox } from "../services/klaviyo.server";
 import { authenticate } from "../shopify.server";
 
-function dispatchPendingKlaviyoEvents() {
-  void processKlaviyoOutbox({ limit: 25 })
+function dispatchPendingKlaviyoEvents(
+  shop: string,
+  orderId: string,
+  uniqueId: string,
+) {
+  void processKlaviyoOutbox({ limit: 1, uniqueId })
     .then((result) => {
       console.log(
-        `Klaviyo outbox processed: ${result.processed}, sent: ${result.sent}, failed: ${result.failed}`,
+        `[Klaviyo] shop=${shop} order=${orderId} processed=${result.processed} sent=${result.sent} failed=${result.failed} blocked=${result.blocked}`,
       );
     })
-    .catch((error: unknown) => {
-      console.error("Failed to process the Klaviyo outbox.", error);
+    .catch(() => {
+      console.error(
+        `[Klaviyo] shop=${shop} order=${orderId} status=processor_error`,
+      );
     });
 }
 
@@ -40,7 +46,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   );
 
   if (result.status !== "ineligible" && result.klaviyoEventUniqueId) {
-    dispatchPendingKlaviyoEvents();
+    dispatchPendingKlaviyoEvents(shop, order.id, result.klaviyoEventUniqueId);
   }
 
   return new Response();

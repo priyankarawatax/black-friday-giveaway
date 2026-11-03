@@ -128,6 +128,55 @@ When you're ready to set up your app in production, you can follow [our deployme
 
 When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
 
+## Store-specific Klaviyo configuration
+
+The app stores a separate Klaviyo configuration for each authenticated
+`.myshopify.com` domain. Private API keys saved from **App > Klaviyo** are
+encrypted with AES-256-GCM before being written to MySQL.
+
+Required production environment variables:
+
+```shell
+KLAVIYO_ENCRYPTION_KEY=<32-byte base64 or 64-character hexadecimal key>
+KLAVIYO_CRON_SECRET=<random secret used by /api/klaviyo-events/process>
+```
+
+Generate the encryption key once and keep the same value across deployments:
+
+```shell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Do not rotate or remove this value until all stored Klaviyo credentials have
+been re-encrypted with the replacement key.
+
+The existing single-store environment configuration remains supported only
+when it is explicitly bound to the verified legacy Shopify domain:
+
+```shell
+KLAVIYO_LEGACY_SHOP_DOMAIN=<verified-store>.myshopify.com
+KLAVIYO_PRIVATE_API_KEY=<existing-private-api-key>
+KLAVIYO_EVENT_NAME=Giveaway Tickets Confirmed
+KLAVIYO_API_REVISION=2026-04-15
+```
+
+`KLAVIYO_LEGACY_SHOP_DOMAIN` must be copied from the authenticated store shown
+on the Klaviyo settings page. Do not use the public storefront URL. The legacy
+key is never used for any other Shopify store.
+
+For each additional store, install the same Shopify app, open **App > Klaviyo**,
+enter that store's private API key, save, and test the connection. The key needs
+`accounts:read` for the connection test and `events:write` for giveaway events.
+
+Deploy database and application changes with:
+
+```shell
+npm run prisma -- generate
+npm run prisma -- migrate deploy
+npm run build
+shopify app deploy
+```
+
 ## Gotchas / Troubleshooting
 
 ### Database tables don't exist

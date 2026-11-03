@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
+import { getKlaviyoQueueConfig } from "./klaviyo-config.server";
 
 const TICKET_BATCH_SIZE = 1_000;
 const TICKET_PREFIX = "UVT-";
@@ -157,6 +158,10 @@ export async function persistGiveawayOrder(
     return { status: "ineligible", reason: "Order subtotal does not earn a ticket." };
   }
 
+  const klaviyoConfig = options.queueKlaviyoEvent
+    ? await getKlaviyoQueueConfig(shop)
+    : null;
+
   return prisma.$transaction(
     async (tx) => {
       await tx.$queryRaw(Prisma.sql`
@@ -225,7 +230,7 @@ export async function persistGiveawayOrder(
       }
 
       let klaviyoEventUniqueId: string | null = null;
-      if (options.queueKlaviyoEvent && order.customerEmail) {
+      if (klaviyoConfig?.enabled && order.customerEmail) {
         const totalTickets = await tx.giveawayTicket.count({
           where: {
             shop,
@@ -244,7 +249,7 @@ export async function persistGiveawayOrder(
             campaignId: campaign.id,
             entryId: entry.id,
             uniqueId: klaviyoEventUniqueId,
-            metricName: "Giveaway Tickets Confirmed",
+            metricName: klaviyoConfig.eventName,
             payload: {
               email: order.customerEmail,
               customerName: order.customerName,

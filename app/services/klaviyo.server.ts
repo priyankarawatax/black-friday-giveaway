@@ -1,10 +1,15 @@
 import type { KlaviyoEventOutbox, Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
+import {
+  DEFAULT_KLAVIYO_REVISION,
+  resolveKlaviyoConfig,
+  type ResolvedKlaviyoConfig,
+} from "./klaviyo-config.server";
 
 const KLAVIYO_EVENTS_ENDPOINT = "https://a.klaviyo.com/api/events";
-const DEFAULT_REVISION = "2026-04-15";
 const PROCESSING_TIMEOUT_MS = 10 * 60 * 1_000;
+const MAX_DELIVERY_ATTEMPTS = 8;
 
 type GiveawayKlaviyoPayload = {
   email: string;
@@ -30,6 +35,7 @@ export type KlaviyoProcessResult = {
   processed: number;
   sent: number;
   failed: number;
+  blocked: number;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,13 +71,18 @@ function retryDelayMs(attempt: number) {
   return Math.min(60 * 60 * 1_000, 30_000 * 2 ** Math.min(attempt, 7));
 }
 
-async function sendEvent(event: KlaviyoEventOutbox) {
-  const apiKey = process.env.KLAVIYO_PRIVATE_API_KEY?.trim();
-  if (!apiKey) throw new Error("Klaviyo is not configured.");
-
+async function sendEvent(
+  event: KlaviyoEventOutbox,
+  config: ResolvedKlaviyoConfig,
+) {
   const payload = parsePayload(event.payload);
   if (!payload) {
-    return { ok: false as const, retryable: false, error: "Invalid event payload." };
+    return {
+      ok: false as const,
+      retryable: false,
+      error: "Invalid event payload.",
+      orderId: "unknown",
+    };
   }
 
   try {
@@ -79,9 +90,10 @@ async function sendEvent(event: KlaviyoEventOutbox) {
       method: "POST",
       headers: {
         Accept: "application/vnd.api+json",
-        Authorization: `Klaviyo-API-Key ${apiKey}`,
+        Authorization: `Klaviyo-API-Key ${config.apiKey}`,
         "Content-Type": "application/vnd.api+json",
-        Revision: process.env.KLAVIYO_API_REVISION?.trim() || DEFAULT_REVISION,
+        Revision:
+          process.env.KLAVIYO_API_REVISION?.trim() || DEFAULT_KLAVIYO_REVISION,
       },
       body: JSON.stringify({
         data: {
@@ -118,19 +130,23 @@ async function sendEvent(event: KlaviyoEventOutbox) {
       signal: AbortSignal.timeout(8_000),
     });
 
-    if (response.ok) return { ok: true as const };
+    if (response.ok) return { ok: true as const, orderId: payload.orderId };
 
-    const responseText = (await response.text()).slice(0, 1_500);
     return {
       ok: false as const,
       retryable: response.status === 429 || response.status >= 500,
-      error: `Klaviyo returned ${response.status}: ${responseText}`,
+      error: `Klaviyo returned status ${response.status}.`,
+      orderId: payload.orderId,
     };
   } catch (error) {
     return {
       ok: false as const,
       retryable: true,
-      error: error instanceof Error ? error.message : "Unknown Klaviyo request error.",
+      error:
+        error instanceof Error && error.name === "TimeoutError"
+          ? "Klaviyo request timed out."
+          : "Klaviyo request failed before a response was received.",
+      orderId: payload.orderId,
     };
   }
 }
@@ -138,10 +154,6 @@ async function sendEvent(event: KlaviyoEventOutbox) {
 export async function processKlaviyoOutbox(
   options: ProcessOptions = {},
 ): Promise<KlaviyoProcessResult> {
-  if (!process.env.KLAVIYO_PRIVATE_API_KEY?.trim()) {
-    return { configured: false, processed: 0, sent: 0, failed: 0 };
-  }
-
   const now = new Date();
   const staleBefore = new Date(now.getTime() - PROCESSING_TIMEOUT_MS);
   const limit = Math.max(1, Math.min(options.limit ?? 25, 100));
@@ -161,6 +173,8 @@ export async function processKlaviyoOutbox(
   let processed = 0;
   let sent = 0;
   let failed = 0;
+  let blocked = 0;
+  const configByShop = new Map<string, Awaited<ReturnType<typeof resolveKlaviyoConfig>>>();
 
   for (const candidate of candidates) {
     const claimed = await prisma.klaviyoEventOutbox.updateMany({
@@ -174,7 +188,34 @@ export async function processKlaviyoOutbox(
     if (claimed.count !== 1) continue;
 
     processed += 1;
-    const result = await sendEvent(candidate);
+    let config = configByShop.get(candidate.shop);
+    if (!config) {
+      config = await resolveKlaviyoConfig(candidate.shop);
+      configByShop.set(candidate.shop, config);
+    }
+
+    if (!config.enabled || !config.configured || !config.apiKey) {
+      blocked += 1;
+      const orderId = parsePayload(candidate.payload)?.orderId ?? "unknown";
+      const reason = config.enabled
+        ? config.error || `Klaviyo credentials are missing for ${candidate.shop}.`
+        : `Klaviyo integration is disabled for ${candidate.shop}.`;
+      await prisma.klaviyoEventOutbox.update({
+        where: { id: candidate.id },
+        data: {
+          status: "BLOCKED",
+          attempts: { increment: 1 },
+          nextAttemptAt: null,
+          lastError: reason.slice(0, 4_000),
+        },
+      });
+      console.warn(
+        `[Klaviyo] shop=${candidate.shop} order=${orderId} status=blocked reason=configuration`,
+      );
+      continue;
+    }
+
+    const result = await sendEvent(candidate, config);
     if (result.ok) {
       sent += 1;
       await prisma.klaviyoEventOutbox.update({
@@ -187,23 +228,30 @@ export async function processKlaviyoOutbox(
           lastError: null,
         },
       });
+      console.info(
+        `[Klaviyo] shop=${candidate.shop} order=${result.orderId} status=sent`,
+      );
       continue;
     }
 
     failed += 1;
-    const nextAttemptAt = result.retryable
+    const canRetry = result.retryable && candidate.attempts + 1 < MAX_DELIVERY_ATTEMPTS;
+    const nextAttemptAt = canRetry
       ? new Date(Date.now() + retryDelayMs(candidate.attempts))
       : null;
     await prisma.klaviyoEventOutbox.update({
       where: { id: candidate.id },
       data: {
-        status: result.retryable ? "FAILED" : "DEAD",
+        status: canRetry ? "FAILED" : "DEAD",
         attempts: { increment: 1 },
         nextAttemptAt,
         lastError: result.error.slice(0, 4_000),
       },
     });
+    console.error(
+      `[Klaviyo] shop=${candidate.shop} order=${result.orderId} status=${canRetry ? "retry_scheduled" : "failed"}`,
+    );
   }
 
-  return { configured: true, processed, sent, failed };
+  return { configured: blocked === 0, processed, sent, failed, blocked };
 }
