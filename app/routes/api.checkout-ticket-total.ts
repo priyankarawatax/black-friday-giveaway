@@ -1,12 +1,20 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import prisma from "../db.server";
+import {
+  isMyShopifyDomain,
+  normalizeShopDomain,
+} from "../services/shop-domain.js";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { sessionToken, cors } = await authenticate.public.checkout(request);
-  const shop = new URL(sessionToken.dest).hostname;
+  const shop = normalizeShopDomain(sessionToken.dest);
   const customerId = sessionToken.sub;
+
+  if (!isMyShopifyDomain(shop)) {
+    return cors(Response.json({ error: "Invalid shop domain." }, { status: 401 }));
+  }
 
   if (!customerId) {
     return cors(Response.json({ previousTickets: 0 }));

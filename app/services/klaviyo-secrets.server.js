@@ -3,26 +3,11 @@ import {
   createDecipheriv,
   randomBytes,
 } from "node:crypto";
+import { normalizeShopDomain } from "./shop-domain.js";
+
+export { isMyShopifyDomain, normalizeShopDomain } from "./shop-domain.js";
 
 const ENCRYPTION_AAD = Buffer.from("klaviyo-private-api-key:v1");
-
-export function normalizeShopDomain(value) {
-  const trimmed = String(value ?? "").trim().toLowerCase();
-  if (!trimmed) return "";
-
-  try {
-    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
-    return url.hostname;
-  } catch {
-    return trimmed.replace(/^https?:\/\//, "").split("/")[0];
-  }
-}
-
-export function isMyShopifyDomain(value) {
-  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(
-    normalizeShopDomain(value),
-  );
-}
 
 function parseEncryptionKey(value = process.env.KLAVIYO_ENCRYPTION_KEY ?? "") {
   const trimmed = value.trim();

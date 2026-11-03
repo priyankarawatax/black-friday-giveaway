@@ -16,6 +16,10 @@ const KEY_TWO = Buffer.alloc(32, 2).toString("base64");
 
 test("normalizes authenticated Shopify shop domains", () => {
   assert.equal(
+    normalizeShopDomain("benoit-vintage.myshopify.com"),
+    "benoit-vintage.myshopify.com",
+  );
+  assert.equal(
     normalizeShopDomain("HTTPS://United-Vintage-UK.myshopify.com/admin"),
     "united-vintage-uk.myshopify.com",
   );

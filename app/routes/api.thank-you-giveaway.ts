@@ -1,6 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import prisma from "../db.server";
+import {
+  isMyShopifyDomain,
+  normalizeShopDomain,
+} from "../services/shop-domain.js";
 import { authenticate } from "../shopify.server";
 
 const VALID_ENTRY_STATUSES = ["ELIGIBLE", "CONFIRMED"];
@@ -21,9 +25,13 @@ function ticketSort(left: string, right: string) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { sessionToken, cors } = await authenticate.public.checkout(request);
-  const shop = new URL(sessionToken.dest).hostname;
+  const shop = normalizeShopDomain(sessionToken.dest);
   const customerId = sessionToken.sub;
   const orderId = new URL(request.url).searchParams.get("orderId")?.trim();
+
+  if (!isMyShopifyDomain(shop)) {
+    return cors(Response.json({ error: "Invalid shop domain." }, { status: 401 }));
+  }
 
   if (!customerId || !orderId) {
     return cors(Response.json({ status: "pending" }));
