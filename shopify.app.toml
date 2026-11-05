@@ -2,7 +2,7 @@
 
 client_id = "7e5518f46849f219153c2fb733d8f3ee"
 name = "Black Friday Giveaway"
-application_url = "https://giveaway.united-vintage.com/app"
+application_url = "https://giveaway.united-vintage.com"
 embedded = true
 
 [build]

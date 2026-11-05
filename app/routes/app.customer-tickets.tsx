@@ -9,6 +9,7 @@ import {
   persistGiveawayOrder,
   type ShopifyOrderGraphqlNode,
 } from "../services/giveaway-order.server";
+import { processKlaviyoOutbox } from "../services/klaviyo.server";
 import { authenticate } from "../shopify.server";
 import styles from "../customer-tickets.module.css";
 
@@ -134,10 +135,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         skipped += 1;
         continue;
       }
-      const result = await persistGiveawayOrder(session.shop, order);
+      const result = await persistGiveawayOrder(session.shop, order, {
+        queueKlaviyoEvent: true,
+      });
       if (result.status === "created") created += 1;
       else if (result.status === "duplicate") duplicates += 1;
       else skipped += 1;
+
+      if (result.status !== "ineligible" && result.klaviyoEventUniqueId) {
+        void processKlaviyoOutbox({
+          limit: 1,
+          uniqueId: result.klaviyoEventUniqueId,
+        }).catch((error) => {
+          console.error(
+            `[Klaviyo] manual sync failed for ${session.shop} order ${order.id}`,
+            error,
+          );
+        });
+      }
     }
 
     cursor = payload.data.orders.pageInfo.endCursor ?? null;
@@ -491,7 +506,8 @@ export default function CustomerTicketsPage() {
         <s-stack direction="block" gap="base">
           <s-paragraph>
             This will check paid Shopify orders and create any missing eligible
-            giveaway entries and tickets for the active campaign.
+            giveaway entries and tickets for the active campaign. When Klaviyo
+            is enabled, missing giveaway events will also be queued.
           </s-paragraph>
           <s-paragraph color="subdued">
             Orders that are already synced will not receive duplicate entries or
@@ -527,7 +543,8 @@ export default function CustomerTicketsPage() {
           <s-banner tone="success">
             Synced {syncFetcher.data.created} new orders.{" "}
             {syncFetcher.data.duplicates} already existed and{" "}
-            {syncFetcher.data.skipped} were not eligible.
+            {syncFetcher.data.skipped} were not eligible. Klaviyo notifications
+            were queued for eligible new orders when the integration was enabled.
           </s-banner>
         ) : syncFetcher.data?.error ? (
           <s-banner tone="critical">{syncFetcher.data.error}</s-banner>

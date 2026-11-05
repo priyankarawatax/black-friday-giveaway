@@ -42,7 +42,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     queueKlaviyoEvent: true,
   });
   console.log(
-    `Processed ${topic} for ${shop}, order ${order.number}: ${result.status}`,
+    `Processed ${topic} for ${shop}, order ${order.number}: ${result.status}${result.status === "ineligible" ? ` (${result.reason})` : ""}`,
   );
 
   if (result.status !== "ineligible" && result.klaviyoEventUniqueId) {
